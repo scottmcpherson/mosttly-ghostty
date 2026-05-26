@@ -8,7 +8,7 @@ on:
         required: true
       prerelease:
         description: "Mark the GitHub release as a prerelease"
-        default: true
+        default: false
         type: boolean
   push:
     tags:
@@ -109,6 +109,8 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :GhosttyCommit $COMMIT" "$INFO"
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" "$INFO"
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$INFO"
+          /usr/libexec/PlistBuddy -c "Set :SUPublicEDKey 8S/ZoJh8oHWEhx+sCOwoGpAgt9xX45tQ7PHJz8zSrQ4=" "$INFO"
+          /usr/libexec/PlistBuddy -c "Set :SUEnableAutomaticChecks true" "$INFO"
 
       - name: Import Developer ID certificate
         env:
@@ -237,6 +239,37 @@ jobs:
           xcrun stapler staple macos/build/Release/Mosttly.app
           ditto -c -k --keepParent macos/build/Release/Mosttly.app Mosttly-macOS-universal.zip
 
+      - name: Setup Sparkle tooling
+        env:
+          SPARKLE_VERSION: 2.9.0
+        run: |
+          set -euo pipefail
+          mkdir -p .action/sparkle
+          cd .action/sparkle
+          curl -L "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-for-Swift-Package-Manager.zip" > sparkle.zip
+          unzip sparkle.zip
+          echo "$(pwd)/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Sparkle appcast
+        env:
+          MOSTTLY_SPARKLE_PRIVATE_KEY: ${{ secrets.MOSTTLY_SPARKLE_PRIVATE_KEY }}
+          MOSTTLY_VERSION: ${{ steps.meta.outputs.version }}
+          MOSTTLY_BUILD: ${{ steps.meta.outputs.build }}
+          MOSTTLY_RELEASE_TAG: ${{ steps.meta.outputs.tag }}
+          MOSTTLY_COMMIT: ${{ steps.meta.outputs.commit }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${MOSTTLY_SPARKLE_PRIVATE_KEY:-}" ]]; then
+            echo "MOSTTLY_SPARKLE_PRIVATE_KEY GitHub secret is required to generate appcast.xml" >&2
+            exit 1
+          fi
+
+          printf '%s' "$MOSTTLY_SPARKLE_PRIVATE_KEY" > signing.key
+          sign_update -f signing.key Mosttly.dmg > sign_update.txt
+          MOSTTLY_COMMIT_LONG="$(git rev-parse HEAD)" python3 ./dist/macos/update_appcast_mosttly.py
+          rm signing.key sign_update.txt
+
       - name: Create or update GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -247,7 +280,7 @@ jobs:
           set -euo pipefail
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" Mosttly.dmg Mosttly-macOS-universal.zip --clobber
+            gh release upload "$TAG" Mosttly.dmg Mosttly-macOS-universal.zip appcast.xml --clobber
           else
             if [[ "$PRERELEASE" == "true" ]]; then
               gh release create "$TAG" \
@@ -256,13 +289,15 @@ jobs:
                 --notes "macOS build for Mosttly Ghostty $VERSION." \
                 --prerelease \
                 Mosttly.dmg \
-                Mosttly-macOS-universal.zip
+                Mosttly-macOS-universal.zip \
+                appcast.xml
             else
               gh release create "$TAG" \
                 --target "$GITHUB_SHA" \
                 --title "Mosttly Ghostty $VERSION" \
                 --notes "macOS build for Mosttly Ghostty $VERSION." \
                 Mosttly.dmg \
-                Mosttly-macOS-universal.zip
+                Mosttly-macOS-universal.zip \
+                appcast.xml
             fi
           fi

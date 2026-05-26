@@ -105,9 +105,9 @@
 		</dict>
 	</array>
 	<key>SUEnableAutomaticChecks</key>
-	<false/>
+	<true/>
 	<key>SUPublicEDKey</key>
-	<string>wsNcGf5hirwtdXMVnYoxRIX/SqZQLMOsYlD3q3imeok=</string>
+	<string>8S/ZoJh8oHWEhx+sCOwoGpAgt9xX45tQ7PHJz8zSrQ4=</string>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>

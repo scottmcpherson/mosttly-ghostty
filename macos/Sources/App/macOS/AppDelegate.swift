@@ -753,8 +753,8 @@ class AppDelegate: NSObject,
 
         // Sync our auto-update settings. If SUEnableAutomaticChecks (in our Info.plist) is
         // explicitly false (NO), auto-updates are disabled. Otherwise, we use the behavior
-        // defined by our "auto-update" configuration (if set) or fall back to Sparkle
-        // user-based defaults.
+        // defined by our "auto-update" configuration (if set) or default to background
+        // checks without automatic downloads.
         if Bundle.main.infoDictionary?["SUEnableAutomaticChecks"] as? Bool == false {
             updateController.updater.automaticallyChecksForUpdates = false
             updateController.updater.automaticallyDownloadsUpdates = false
@@ -763,6 +763,9 @@ class AppDelegate: NSObject,
                 autoUpdate == .check || autoUpdate == .download
             updateController.updater.automaticallyDownloadsUpdates =
                 autoUpdate == .download
+        } else {
+            updateController.updater.automaticallyChecksForUpdates = true
+            updateController.updater.automaticallyDownloadsUpdates = false
             /*
              To test `auto-update` easily, uncomment the line below and
              delete `SUEnableAutomaticChecks` in Ghostty-Info.plist.
