@@ -152,6 +152,12 @@ jobs:
             fi
           done
 
+          while IFS= read -r path; do
+            if file "$path" | grep -q "Mach-O"; then
+              /usr/bin/codesign --verbose --force --sign "$IDENTITY" --options runtime --timestamp "$path"
+            fi
+          done < <(find "$APP/Contents/Resources" -type f -perm -111)
+
           /usr/bin/codesign \
             --verbose \
             --force \
@@ -203,9 +209,26 @@ jobs:
             --issuer "$APPLE_NOTARIZATION_ISSUER"
           rm notarization_key.p8
 
-          xcrun notarytool submit Mosttly.dmg --keychain-profile "notarytool-profile" --wait
+          submit_log="$(mktemp)"
+          xcrun notarytool submit Mosttly.dmg --keychain-profile "notarytool-profile" --wait 2>&1 | tee "$submit_log"
+
+          submission_id="$(awk '/^[[:space:]]*id:/ { print $2; exit }' "$submit_log")"
+          status="$(awk '/^[[:space:]]*status:/ { print $2; exit }' "$submit_log")"
+
+          if [[ "$status" != "Accepted" ]]; then
+            echo "Notarization failed with status: ${status:-unknown}"
+            if [[ -n "$submission_id" ]]; then
+              xcrun notarytool log "$submission_id" \
+                --keychain-profile "notarytool-profile" \
+                notarization-log.json || true
+              cat notarization-log.json || true
+            fi
+            exit 1
+          fi
+
           xcrun stapler staple Mosttly.dmg
           xcrun stapler staple macos/build/Release/Mosttly.app
+          ditto -c -k --keepParent macos/build/Release/Mosttly.app Mosttly-macOS-universal.zip
 
       - name: Create or update GitHub release
         env:
