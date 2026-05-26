@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: mosttly-macos-release
@@ -30,6 +31,7 @@ jobs:
     env:
       ZIG_LOCAL_CACHE_DIR: /Users/runner/zig/local-cache
       ZIG_GLOBAL_CACHE_DIR: /Users/runner/zig/global-cache
+      NIX_CONFIG: accept-flake-config = true
 
     steps:
       - name: Checkout
@@ -72,19 +74,24 @@ jobs:
         with:
           determinate: true
 
+      - name: Configure Ghostty binary cache
+        uses: cachix/cachix-action@5f2d7c5294214f71b873db4b969586b980625e71 # v17
+        with:
+          name: ghostty
+
       - name: Xcode version
         run: xcodebuild -version
 
       - name: Build GhosttyKit and resources
         run: |
-          nix develop -c zig build \
+          nix develop --accept-flake-config -c zig build \
             -Doptimize=ReleaseFast \
             -Demit-macos-app=false \
             -Dversion-string="${{ steps.meta.outputs.version }}"
 
       - name: Build Mosttly.app
         run: |
-          nix develop -c nu macos/build.nu \
+          nix develop --accept-flake-config -c nu macos/build.nu \
             --configuration Release \
             --action build
 
